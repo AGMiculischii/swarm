@@ -42,6 +42,7 @@ class SerCom:
 
     def __init__(self, port):
         self.port = port
+        self.ser = None
 
     def open_port(self, baud=115200):
         try:
@@ -141,45 +142,35 @@ class SwarmNode(SerCom):
         else:
             return -1
 
-    def __display_rato(self):
+    def __process_rato(self):
         dist = 0
         t_buf = self.__split_buf_msg(self.__rato_buf, self.__OUT_LEN['RATO'])
         sz = len(t_buf)
-        if len(t_buf) != 0:
+        if not sz == 0:
             for err, d, rssi in iter(t_buf):
                 if not err[-1] == 0:
                     sz -= 1
                     continue
                 dist += int(d) / 100
-        # num_val = len(self.__rato_buf)
-        # if not num_val == 0:
-        #    for msg in self.__rato_buf:
-        #        msg = msg.split(',')
-        #        if not len(msg) == 3:
-        #            continue
-        #        err, d, rssi = msg
-        #        if not err[-1] == '0':
-        #            num_val -= 1
-        #            continue
+
         dist = dist / sz if not sz == 0 else 0
 
-        out_str = colorama.Style.BRIGHT + colorama.Fore.CYAN + \
-            "Current distance: {:>5.2f} m".format(dist) +\
-            colorama.Style.RESET_ALL
+        return dist
 
-        # print( out_str , end = '\r')
-        print(out_str, file=open(self.CUR_FILE, 'a'))
-        return out_str
-
-    def __display_rrn(self):
+    def __process_rrn(self):
         dist = 0
         t_buf = self.__split_buf_msg(self.__rato_buf, self.__OUT_LEN['RRN'])
         sz = len(t_buf)
         if not sz == 0:
-            for msg in self.__rrn_buf:
-                `msg = msg.split(',')
+            for *addr, err, d, ncfg, ncfgd in iter(t_buf):
+                if not err == '0':
+                    sz -= 1
+                    continue
+                dist += int(d) / 100
 
-        pass
+        dist = dist / sz if not sz == 0 else 0
+
+        return dist
 
     def process_buf(self, out):
         t_buf = self.__buffer[:]
@@ -196,9 +187,16 @@ class SwarmNode(SerCom):
             out.write(item)
 
         if self.disp_dist:
-            o_str = self.__display_rato()
-            print(o_str, end='\r')
+            rato_dist = self.__process_rato()
+            rrn_dist = self.__process_rrn()
+
+            out_str = colorama.Style.BRIGHT + colorama.Fore.CYAN + \
+                "Current distance (RATO): {:>5.2f} m".format(rato_dist) + " " + \
+                "Current distance (RRN): {:>5.2f} m".format(rrn_dist) + colorama.Style.RESET_ALL
+            print(out_str, end='\r')
+            print(out_str, file=self.CUR_FILE)
 
         self.__rato_buf.clear()
+        self.__rrn_buf.clear()
 
         out.flush()
