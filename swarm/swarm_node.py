@@ -18,6 +18,10 @@ def get_ports():
     return s_cp
 
 
+def num_to_portname(ser, num):
+    return ser[num][0]
+
+
 def select_port(cp_list):
     num = int(input('Which port do you want to select?: '))
     return cp_list[num][0]
@@ -80,15 +84,16 @@ class SwarmNode(SerCom):
 
     __OUT_LEN = {
         'RATO': 3,
-        'RRN': 6
+        'RRN': 5
     }
 
     __NOTIF = ['RRN', 'NIN', 'AIR', 'SDAT', 'DNO']
+    __NOTIF_LEN = 5
 
     def __init__(self, port, disp_dist=False, disp_rrn=False):
         SerCom.__init__(self, port)
         self.disp_dist = disp_dist
-        self.dist_rrn = disp_rrn
+        self.disp_rrn = disp_rrn
 
     def ranging(self, addr):
         if type(addr) != str:
@@ -145,10 +150,11 @@ class SwarmNode(SerCom):
     def __process_rato(self):
         dist = 0
         t_buf = self.__split_buf_msg(self.__rato_buf, self.__OUT_LEN['RATO'])
-        sz = len(t_buf)
+
+        sz = len(t_buf) if not t_buf == -1 else 0
         if not sz == 0:
             for err, d, rssi in iter(t_buf):
-                if not err[-1] == 0:
+                if not err[-1] == '0':
                     sz -= 1
                     continue
                 dist += int(d) / 100
@@ -159,10 +165,11 @@ class SwarmNode(SerCom):
 
     def __process_rrn(self):
         dist = 0
-        t_buf = self.__split_buf_msg(self.__rato_buf, self.__OUT_LEN['RRN'])
-        sz = len(t_buf)
+        t_buf = self.__split_buf_msg(self.__rrn_buf, self.__OUT_LEN['RRN'])
+
+        sz = len(t_buf) if not t_buf == -1 else 0
         if not sz == 0:
-            for *addr, err, d, ncfg, ncfgd in iter(t_buf):
+            for srca, reca, err, d, *ncfg in iter(t_buf):
                 if not err == '0':
                     sz -= 1
                     continue
@@ -176,9 +183,19 @@ class SwarmNode(SerCom):
         t_buf = self.__buffer[:]
 
         for i in range(len(t_buf)):
-            if any(n in t_buf[i] for n in self.__NOTIF):
-                self.__rrn_buf.append(self.__buffer[i])
+            if self.__NOTIF[0] in t_buf[i]:
+                ''' Process RRN notification
+                Firmware version 2.1 has such format of Ranging Notification:
+                '*RRN:<SrcID>,<DestID>,<ErrCode>,<Distance>,<DataNCFG>'
+                Pass '*RRN:' and append it to __rrn_buffer
+                '''
+                self.__rrn_buf.append(self.__buffer[i][self.__NOTIF_LEN:])
+            elif any(n in t_buf[i] for n in self.__NOTIF):
+                continue
             else:
+                ''' Process RATO
+                Format of RATO messages is: '=<ErrC>,<Distance>,<RSSI>'
+                '''
                 self.__rato_buf.append(self.__buffer[i])
 
         self.__buffer.clear()
@@ -190,11 +207,14 @@ class SwarmNode(SerCom):
             rato_dist = self.__process_rato()
             rrn_dist = self.__process_rrn()
 
-            out_str = colorama.Style.BRIGHT + colorama.Fore.CYAN + \
-                "Current distance (RATO): {:>5.2f} m".format(rato_dist) + " " + \
-                "Current distance (RRN): {:>5.2f} m".format(rrn_dist) + colorama.Style.RESET_ALL
-            print(out_str, end='\r')
-            print(out_str, file=self.CUR_FILE)
+            out_str = "Current distance (RATO): {:>5.2f} m".format(rato_dist)
+            if self.disp_rrn:
+                out_str += " " + \
+                           "Current distance (RRN): {:>5.2f} m".format(rrn_dist)
+
+            colored_out = colorama.Style.BRIGHT + colorama.Fore.CYAN + out_str + colorama.Style.RESET_ALL
+            print(colored_out, end='\r')
+            print(out_str, file=open(self.CUR_FILE, 'a'))
 
         self.__rato_buf.clear()
         self.__rrn_buf.clear()
