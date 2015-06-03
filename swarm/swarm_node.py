@@ -2,6 +2,7 @@ import sys
 import serial
 import serial.tools.list_ports
 import colorama
+import time
 
 
 def get_ports():
@@ -110,12 +111,17 @@ class SwarmNode(SerCom):
         return self.get_resp_u()
 
     def get_swarm_data(self):
+        """ Method for working with threads
+        Can be used for obtaining all messages from the connected SWARMBEE module
+        For others activities, e.g. getting response after sending a command
+        use the get_resp_u method
+        """
         while True:
             try:
                 msg = self.get_resp_u()
                 self.__buffer.append(msg)
             except serial.SerialException:
-                return
+                raise
 
     def get_resp_b(self):
         c = self.ser.read()
@@ -128,16 +134,20 @@ class SwarmNode(SerCom):
                 data.append(self.ser.readline())
             c += bytes(str(nlines).encode('utf-8')) + self._RETEND
             data = b''.join(data)
-        return c + data
+
+        ts = self.__time_stamp().encode('utf-8')
+        return ts + b' ' + c + data
 
     def get_resp_u(self):
         return self.get_resp_b().decode('utf-8')
 
-    def __split_buf_msg(self, buf, msg_len):
+    @staticmethod
+    def __split_buf_msg(buf, msg_len):
         split_msg = []
         num_val = len(buf)
         if not num_val == 0:
             for msg in buf:
+                ts, msg = msg.split() # Remove timestamp in buffer from useful payload
                 msg = msg.split(',')
                 if not len(msg) == msg_len:
                     continue
@@ -220,3 +230,11 @@ class SwarmNode(SerCom):
         self.__rrn_buf.clear()
 
         out.flush()
+
+    @staticmethod
+    def __time_stamp():
+        c_time = time.time()
+        ms = int(round(c_time * 1000 % 1000))
+
+        time_str = '{}.{:3d}'.format(time.strftime('%H:%M:%S'), ms)
+        return time_str
