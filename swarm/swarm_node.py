@@ -3,21 +3,30 @@ import serial
 import serial.tools.list_ports
 import colorama
 import time
-
+import winreg
+import re
 
 def get_ports():
+    avail_ports = []
     if sys.platform.startswith('win32'):
-        com_ports = [(name, desc.encode('utf-16-be').decode('cp1251'), v_p)
-                     for name, desc, v_p
-                     in serial.tools.list_ports.comports()]
+        devdesc_path = r'HARDWARE\DEVICEMAP\SERIALCOMM'
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, devdesc_path) as key:
+            sub_keys, values, modified = winreg.QueryInfoKey(key)
+            for i in range(values):
+                avail_ports.append(winreg.EnumValue(key, i))
     else:
         raise NotImplementedError('Add functionality for other than win32 systems')
-    s_cp = sorted(com_ports, key=lambda tup: tup[0])
+    s_cp = sorted(avail_ports, key=lambda tup: tup[1])
+
     for num, port in enumerate(s_cp):
-        print('{0} - PORT: {1[0]}, DESCRIPTION: {1[1]}'.format(num, port))
+        print('{0} - PORT: {1[1]}, DESCRIPTION: {1[0]}'.format(num, port))
 
     return s_cp
 
+def _com_port_num(com_name):
+    r = re.search(r'\d$', com_name)
+    if r is not None:
+        return r
 
 def num_to_portname(ser, num):
     return ser[num][0]
