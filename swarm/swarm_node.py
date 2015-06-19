@@ -13,20 +13,19 @@ def get_ports():
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, devdesc_path) as key:
             sub_keys, values, modified = winreg.QueryInfoKey(key)
             for i in range(values):
-                avail_ports.append(winreg.EnumValue(key, i))
+                # Use [:-1] because there are the flag value comes as third parameter
+                avail_ports.append(winreg.EnumValue(key, i)[:-1])
     else:
         raise NotImplementedError('Add functionality for other than win32 systems')
-    s_cp = sorted(avail_ports, key=lambda tup: tup[1])
 
-    for num, port in enumerate(s_cp):
-        print('{0} - PORT: {1[1]}, DESCRIPTION: {1[0]}'.format(num, port))
+    s_cp = sorted(avail_ports, key=lambda tup: _com_port_num(tup[1]))
 
     return s_cp
 
 def _com_port_num(com_name):
-    r = re.search(r'\d$', com_name)
+    r = re.search(r'\d+$', com_name)
     if r is not None:
-        return r
+        return int(r.group(0))
 
 def num_to_portname(ser, num):
     return ser[num][0]
