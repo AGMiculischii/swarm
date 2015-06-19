@@ -119,6 +119,7 @@ class SwarmNode(SerCom):
         while True:
             try:
                 msg = self.get_resp_u()
+                # print(msg)  # FOR DEBUG
                 self.__buffer.append(msg)
             except serial.SerialException:
                 raise
@@ -147,7 +148,7 @@ class SwarmNode(SerCom):
         num_val = len(buf)
         if not num_val == 0:
             for msg in buf:
-                ts, msg = msg.split() # Remove timestamp in buffer from useful payload
+                ts, msg = msg.split()  # Remove timestamp in buffer from useful payload
                 msg = msg.split(',')
                 if not len(msg) == msg_len:
                     continue
@@ -236,5 +237,5 @@ class SwarmNode(SerCom):
         c_time = time.time()
         ms = int(round(c_time * 1000 % 1000))
 
-        time_str = '{}.{:3d}'.format(time.strftime('%H:%M:%S'), ms)
+        time_str = '{}.{:0=3d}'.format(time.strftime('%H:%M:%S'), ms)
         return time_str
